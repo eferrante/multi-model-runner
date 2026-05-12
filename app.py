@@ -40,9 +40,26 @@ def parse_cot(text: str) -> tuple:
     return None, text.strip()
 
 
+def render_result(result):
+    if result.get("error"):
+        st.error(result["error"])
+        return
+    thinking, answer = parse_cot(result["text"])
+    if thinking:
+        with st.expander("Chain of Thought"):
+            st.markdown(thinking)
+    st.markdown("**Answer**")
+    st.markdown(answer)
+
+
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="Multi-Model Runner", page_icon="⚡", layout="wide")
+
+if "results" not in st.session_state:
+    st.session_state.results = {}
+if "models_run" not in st.session_state:
+    st.session_state.models_run = []
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
@@ -64,16 +81,27 @@ st.title("⚡ Multi-Model Runner")
 
 prompt = st.text_area("Prompt", height=200, placeholder="Enter your prompt here...")
 
-run_btn = st.button(
-    "Run",
-    type="primary",
-    disabled=not api_key or not selected_models or not prompt.strip(),
-    use_container_width=True,
-)
+btn_col1, btn_col2 = st.columns([5, 1])
+with btn_col1:
+    run_btn = st.button(
+        "Run",
+        type="primary",
+        disabled=not api_key or not selected_models or not prompt.strip(),
+        use_container_width=True,
+    )
+with btn_col2:
+    reset_btn = st.button("Reset", use_container_width=True)
+
+if reset_btn:
+    st.session_state.results = {}
+    st.session_state.models_run = []
+    st.rerun()
 
 if run_btn:
-    st.divider()
+    st.session_state.results = {}
+    st.session_state.models_run = list(selected_models)
 
+    st.divider()
     cols_per_row = min(len(selected_models), 3)
     cols = st.columns(cols_per_row)
 
@@ -92,15 +120,22 @@ if run_btn:
         for future in as_completed(futures):
             model = futures[future]
             try:
-                result = future.result()
+                text = future.result()
+                st.session_state.results[model] = {"text": text}
             except Exception as exc:
-                placeholders[model].error(f"Error: {exc}")
-                continue
+                st.session_state.results[model] = {"error": str(exc)}
 
-            thinking, answer = parse_cot(result)
             with placeholders[model].container():
-                if thinking:
-                    with st.expander("Chain of Thought"):
-                        st.markdown(thinking)
-                st.markdown("**Answer**")
-                st.markdown(answer)
+                render_result(st.session_state.results[model])
+
+elif st.session_state.results:
+    st.divider()
+    models_run = st.session_state.models_run
+    cols_per_row = min(len(models_run), 3)
+    cols = st.columns(cols_per_row)
+
+    for i, model in enumerate(models_run):
+        with cols[i % cols_per_row]:
+            st.subheader(model)
+            if model in st.session_state.results:
+                render_result(st.session_state.results[model])
