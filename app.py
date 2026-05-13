@@ -61,19 +61,24 @@ if "results" not in st.session_state:
 if "models_run" not in st.session_state:
     st.session_state.models_run = []
 
+_secret_key = st.secrets.get("COMETAPI_KEY", "")
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.header("API Key")
-    api_key = st.text_input(
-        "CometAPI Key",
-        type="password",
-        placeholder="sk-...",
-    )
+    if not _secret_key:
+        st.header("API Key")
+        api_key = st.text_input(
+            "CometAPI Key",
+            type="password",
+            placeholder="sk-...",
+        )
+        if not api_key:
+            st.warning("Enter your CometAPI key to get started.")
+    else:
+        api_key = _secret_key
     st.header("Models")
     selected_models = [m for m in MODELS if st.checkbox(m, value=True)]
-    if not api_key:
-        st.warning("Enter your CometAPI key to get started.")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
