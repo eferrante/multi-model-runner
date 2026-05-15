@@ -58,8 +58,8 @@ st.set_page_config(page_title="Multi-Model Runner", page_icon="⚡", layout="wid
 
 if "results" not in st.session_state:
     st.session_state.results = {}
-if "models_run" not in st.session_state:
-    st.session_state.models_run = []
+if "jobs_run" not in st.session_state:
+    st.session_state.jobs_run = []
 
 _secret_key = st.secrets.get("COMETAPI_KEY", "")
 
@@ -79,6 +79,8 @@ with st.sidebar:
         api_key = _secret_key
     st.header("Models")
     selected_models = [m for m in MODELS if st.checkbox(m, value=True)]
+    st.header("Runs")
+    n_runs = st.slider("Parallel runs per model", min_value=1, max_value=8, value=1)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -99,48 +101,55 @@ with btn_col2:
 
 if reset_btn:
     st.session_state.results = {}
-    st.session_state.models_run = []
+    st.session_state.jobs_run = []
     st.rerun()
 
 if run_btn:
     st.session_state.results = {}
-    st.session_state.models_run = list(selected_models)
+    # jobs_run is a list of (model, run_index) tuples
+    jobs = [(model, run_idx) for model in selected_models for run_idx in range(1, n_runs + 1)]
+    st.session_state.jobs_run = jobs
 
     st.divider()
-    cols_per_row = min(len(selected_models), 3)
+    cols_per_row = min(len(jobs), 3)
     cols = st.columns(cols_per_row)
 
     placeholders = {}
-    for i, model in enumerate(selected_models):
+    for i, (model, run_idx) in enumerate(jobs):
         with cols[i % cols_per_row]:
-            st.subheader(model)
-            placeholders[model] = st.empty()
-            placeholders[model].status("Running...", state="running")
+            label = f"{model} — run {run_idx}" if n_runs > 1 else model
+            st.subheader(label)
+            key = (model, run_idx)
+            placeholders[key] = st.empty()
+            placeholders[key].status("Running...", state="running")
 
-    with ThreadPoolExecutor(max_workers=len(selected_models)) as executor:
+    with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
         futures = {
-            executor.submit(query_model, api_key, model, prompt.strip()): model
-            for model in selected_models
+            executor.submit(query_model, api_key, model, prompt.strip()): (model, run_idx)
+            for model, run_idx in jobs
         }
         for future in as_completed(futures):
-            model = futures[future]
+            key = futures[future]
             try:
                 text = future.result()
-                st.session_state.results[model] = {"text": text}
+                st.session_state.results[key] = {"text": text}
             except Exception as exc:
-                st.session_state.results[model] = {"error": str(exc)}
+                st.session_state.results[key] = {"error": str(exc)}
 
-            with placeholders[model].container():
-                render_result(st.session_state.results[model])
+            with placeholders[key].container():
+                render_result(st.session_state.results[key])
 
-elif st.session_state.results:
+elif st.session_state.jobs_run:
     st.divider()
-    models_run = st.session_state.models_run
-    cols_per_row = min(len(models_run), 3)
+    jobs = st.session_state.jobs_run
+    n_runs_stored = max(run_idx for _, run_idx in jobs)
+    cols_per_row = min(len(jobs), 3)
     cols = st.columns(cols_per_row)
 
-    for i, model in enumerate(models_run):
+    for i, (model, run_idx) in enumerate(jobs):
         with cols[i % cols_per_row]:
-            st.subheader(model)
-            if model in st.session_state.results:
-                render_result(st.session_state.results[model])
+            label = f"{model} — run {run_idx}" if n_runs_stored > 1 else model
+            st.subheader(label)
+            key = (model, run_idx)
+            if key in st.session_state.results:
+                render_result(st.session_state.results[key])
