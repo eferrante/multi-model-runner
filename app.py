@@ -21,14 +21,18 @@ SYSTEM_PROMPT = (
 )
 
 
-def query_model(api_key: str, model: str, prompt: str) -> str:
+def query_model(api_key: str, model: str, prompt: str, temperature: float | None = None) -> str:
     client = OpenAI(api_key=api_key, base_url=COMETAPI_BASE_URL)
+    kwargs = {}
+    if temperature is not None:
+        kwargs["temperature"] = temperature
     resp = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
+        **kwargs,
     )
     return resp.choices[0].message.content
 
@@ -81,6 +85,9 @@ with st.sidebar:
     selected_models = [m for m in MODELS if st.checkbox(m, value=True)]
     st.header("Runs")
     n_runs = st.slider("Parallel runs per model", min_value=1, max_value=8, value=1)
+    st.header("Temperature")
+    custom_temp = st.checkbox("Custom temperature")
+    temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=0.7, step=0.01, disabled=not custom_temp) if custom_temp else None
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -125,7 +132,7 @@ if run_btn:
 
     with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
         futures = {
-            executor.submit(query_model, api_key, model, prompt.strip()): (model, run_idx)
+            executor.submit(query_model, api_key, model, prompt.strip(), temperature): (model, run_idx)
             for model, run_idx in jobs
         }
         for future in as_completed(futures):
