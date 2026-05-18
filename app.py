@@ -23,13 +23,17 @@ SYSTEM_PROMPT = (
 
 def query_model(api_key: str, model: str, prompt: str) -> str:
     client = OpenAI(api_key=api_key, base_url=COMETAPI_BASE_URL)
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
+    is_claude = "claude" in model.lower()
+    kwargs = (
+        {"extra_body": {"system": SYSTEM_PROMPT}}
+        if is_claude
+        else {}
     )
+    messages = [{"role": "user", "content": prompt}] if is_claude else [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+    resp = client.chat.completions.create(model=model, messages=messages, **kwargs)
     return resp.choices[0].message.content
 
 
