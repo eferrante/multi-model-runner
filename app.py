@@ -8,11 +8,6 @@ COMETAPI_BASE_URL = "https://api.cometapi.com/v1"
 
 MODELS = [
     "gemini-3.1-pro-preview",
-    "claude-opus-4-7",
-    "gpt-5.5",
-    "doubao-seed-2-0-pro-260215",
-    "qwen3.6-plus",
-    "kimi-k2.6",
 ]
 
 SYSTEM_PROMPT = (
